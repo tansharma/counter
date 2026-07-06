@@ -1,0 +1,29 @@
+name: Counter
+options:
+  bundleIdPrefix: com.tansharma
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  CounterCore:
+    path: CounterCore
+targets:
+  Counter:
+    type: application
+    platform: macOS
+    sources: [Counter]
+    dependencies:
+      - package: CounterCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tansharma.Counter
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        # Deliberately NOT sandboxed: the app reads ~/.claude/projects directly.
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
