@@ -30,6 +30,9 @@ final class DataStore {
     }
 
     func refresh() async {
+        // Two scenes drive refresh (dashboard + menu bar); drop overlapping calls
+        // so a slow parse can't be re-entered before it finishes.
+        guard !isLoading else { return }
         isLoading = true
         let root = projectsRoot
         let accountFile = claudeJson
@@ -53,6 +56,13 @@ final class DataStore {
     var cacheEfficiency: Double { UsageAnalytics.cacheEfficiency(events) }
     var cacheSavingsUSD: Double { UsageAnalytics.totalCacheSavingsUSD(events) }
     var busiestDay: UsageAnalytics.DayBucket? { UsageAnalytics.busiestDay(events) }
+
+    /// Today's bucket (tokens + estimated cost), or nil if nothing today — feeds the
+    /// menu-bar dropdown. Reuses `dailySeries`; no new analytics.
+    var today: UsageAnalytics.DayBucket? {
+        let start = Calendar.current.startOfDay(for: .now)
+        return UsageAnalytics.dailySeries(events).first { $0.day == start }
+    }
 
     func dailySeries(days: Int) -> [UsageAnalytics.DayBucket] {
         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .distantPast
