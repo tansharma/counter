@@ -18,13 +18,18 @@ struct ProjectTimeCard: View {
                         header("Active time")
                         header("Sessions")
                         header("Tokens")
+                        Text("")
                     }
                     ForEach(slices.prefix(8)) { slice in
                         GridRow {
-                            Text(slice.name)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Theme.textPrimary)
-                                .lineLimit(1)
+                            NavigationLink(value: slice) {
+                                Text(slice.name)
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(Theme.accent)
+                                    .lineLimit(1)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Show all history for \(slice.name)")
                             Text(Format.duration(slice.activeSeconds))
                                 .font(Theme.numberFont(13))
                                 .foregroundStyle(Theme.positive)
@@ -34,6 +39,12 @@ struct ProjectTimeCard: View {
                             Text(Format.tokens(slice.totalTokens))
                                 .font(Theme.numberFont(13))
                                 .foregroundStyle(Theme.textPrimary)
+                            NavigationLink(value: slice) {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
