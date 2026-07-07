@@ -213,6 +213,32 @@ final class AnalyticsTests: XCTestCase {
         XCTAssertEqual(normalized.map(\.agent), [.codex, .codex])
     }
 
+    // MARK: Local usage
+
+    func testLocalUsageAggregatesOllamaModels() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", model: "qwen2.5vl:7b",
+                  input: 1_000_000, output: 200_000, session: "l1"),
+            event(at: "2026-07-01T10:05:00Z", model: "llama3.3:70b",
+                  input: 100, output: 50, session: "l2"),
+            event(at: "2026-07-01T11:00:00Z", model: "claude-sonnet-5",
+                  input: 1_199_850, output: 0, session: "c1"),
+        ]
+        let local = try! XCTUnwrap(UsageAnalytics.localUsage(events))
+        XCTAssertEqual(local.localTokens, 1_200_150)
+        XCTAssertEqual(local.localSessions, 2)
+        XCTAssertEqual(local.localEvents, 2)
+        XCTAssertEqual(local.localShare, 0.5, accuracy: 0.001)
+        XCTAssertEqual(local.models, ["qwen2.5vl:7b", "llama3.3:70b"])
+        // 1M in @ $1 + 0.2M out @ $5 = $2, plus the tiny llama event.
+        XCTAssertEqual(local.cloudEquivalentUSD, 2.0 + 0.00035, accuracy: 0.0001)
+    }
+
+    func testLocalUsageNilWhenAllCloud() {
+        XCTAssertNil(UsageAnalytics.localUsage([event(at: "2026-07-01T10:00:00Z")]))
+        XCTAssertNil(UsageAnalytics.localUsage([]))
+    }
+
     // MARK: Session summaries (project drill-down)
 
     func testSessionSummariesFiltersSortsAndComputes() {
