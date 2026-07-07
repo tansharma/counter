@@ -9,24 +9,32 @@ struct DashboardView: View {
     @State private var now = Date.now
 
     var body: some View {
-        ScrollView {
-            if store.hasNoData {
-                emptyState
-            } else {
-                VStack(spacing: 16) {
-                    header
-                    gaugeRow
-                    UsageOverTimeCard(store: store)
-                    HStack(alignment: .top, spacing: 16) {
-                        ModelBreakdownCard(slices: store.modelSlices)
-                        ProjectTimeCard(slices: store.projectSlices)
+        NavigationStack {
+            ScrollView {
+                if store.hasNoData {
+                    emptyState
+                } else {
+                    VStack(spacing: 16) {
+                        header
+                        gaugeRow
+                        UsageOverTimeCard(store: store)
+                        HStack(alignment: .top, spacing: 16) {
+                            ModelBreakdownCard(slices: store.modelSlices)
+                            ProjectTimeCard(slices: store.projectSlices)
+                        }
+                        if store.agentSlices.count > 1 {
+                            AgentBreakdownCard(slices: store.agentSlices)
+                        }
+                        FunFactsCard(store: store)
                     }
-                    FunFactsCard(store: store)
+                    .padding(20)
                 }
-                .padding(20)
+            }
+            .background(Theme.background)
+            .navigationDestination(for: UsageAnalytics.ProjectSlice.self) { slice in
+                ProjectDetailView(store: store, project: slice)
             }
         }
-        .background(Theme.background)
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 if let refreshed = store.lastRefreshed {
@@ -169,10 +177,10 @@ struct DashboardView: View {
             Image(systemName: "gauge.with.dots.needle.0percent")
                 .font(.system(size: 44))
                 .foregroundStyle(Theme.textSecondary)
-            Text("No Claude Code sessions found")
+            Text("No agent sessions found")
                 .font(Theme.displayFont(20))
                 .foregroundStyle(Theme.textPrimary)
-            Text("Counter reads ~/.claude/projects. Run a Claude Code session, then refresh.")
+            Text("Counter reads Claude Code, Codex, Gemini CLI, and OpenCode session logs. Run a session, check enabled sources in Settings (⌘,), then refresh.")
                 .font(.system(size: 13, design: .rounded))
                 .foregroundStyle(Theme.textSecondary)
             Button("Refresh") { Task { await store.refresh() } }
