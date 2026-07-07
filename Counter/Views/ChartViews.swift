@@ -4,6 +4,42 @@ import CounterCore
 
 // MARK: - Usage over time
 
+/// The daily-tokens bar chart body, shared by the dashboard card and the
+/// project drill-down.
+struct TokensBarChart: View {
+    let series: [UsageAnalytics.DayBucket]
+
+    var body: some View {
+        if series.isEmpty {
+            Text("No usage in this range.")
+                .foregroundStyle(Theme.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 160)
+        } else {
+            Chart(series) { bucket in
+                BarMark(
+                    x: .value("Day", bucket.day, unit: .day),
+                    y: .value("Tokens", bucket.totalTokens)
+                )
+                .foregroundStyle(Theme.accent.gradient)
+                .cornerRadius(3)
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { axisValue in
+                    AxisGridLine().foregroundStyle(Theme.surfaceRaised)
+                    AxisValueLabel {
+                        if let tokens = axisValue.as(Int.self) {
+                            Text(Format.tokens(tokens))
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 160)
+        }
+    }
+}
+
 struct UsageOverTimeCard: View {
     let store: DataStore
     @State private var rangeDays = 30
@@ -19,35 +55,48 @@ struct UsageOverTimeCard: View {
             .labelsHidden()
             .frame(width: 180)
 
-            let series = store.dailySeries(days: rangeDays)
-            if series.isEmpty {
-                Text("No usage in this range.")
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 160)
-            } else {
-                Chart(series) { bucket in
-                    BarMark(
-                        x: .value("Day", bucket.day, unit: .day),
-                        y: .value("Tokens", bucket.totalTokens)
-                    )
-                    .foregroundStyle(Theme.accent.gradient)
-                    .cornerRadius(3)
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading) { axisValue in
-                        AxisGridLine().foregroundStyle(Theme.surfaceRaised)
-                        AxisValueLabel {
-                            if let tokens = axisValue.as(Int.self) {
-                                Text(Format.tokens(tokens))
-                                    .font(.system(size: 10, design: .rounded))
-                                    .foregroundStyle(Theme.textSecondary)
-                            }
-                        }
-                    }
-                }
-                .frame(minHeight: 160)
-            }
+            TokensBarChart(series: store.dailySeries(days: rangeDays))
         }
+    }
+}
+
+// MARK: - Breakdown rows shared by the model and agent cards
+
+/// One labelled share bar: dot, name, tokens, cost, and a capsule proportional
+/// to the slice's share of the grand total.
+struct BreakdownRow: View {
+    let color: Color
+    let label: String
+    let totalTokens: Int
+    let estimatedCostUSD: Double
+    let share: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Circle().fill(color).frame(width: 8, height: 8)
+                Text(label)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Text(Format.tokens(totalTokens))
+                    .font(Theme.numberFont(13))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(Format.usd(estimatedCostUSD))
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 64, alignment: .trailing)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.surfaceRaised)
+                    Capsule().fill(color.gradient)
+                        .frame(width: max(proxy.size.width * share, 4))
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -65,44 +114,58 @@ struct ModelBreakdownCard: View {
                     .foregroundStyle(Theme.textSecondary)
             } else {
                 ForEach(Array(slices.enumerated()), id: \.element.id) { index, slice in
-                    let share = Double(slice.totalTokens) / Double(grandTotal)
-                    let color = Theme.series[index % Theme.series.count]
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Circle().fill(color).frame(width: 8, height: 8)
-                            Text(prettyModelName(slice.model))
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Theme.textPrimary)
-                            Spacer()
-                            Text(Format.tokens(slice.totalTokens))
-                                .font(Theme.numberFont(13))
-                                .foregroundStyle(Theme.textPrimary)
-                            Text(Format.usd(slice.estimatedCostUSD))
-                                .font(.system(size: 11, design: .rounded))
-                                .foregroundStyle(Theme.textSecondary)
-                                .frame(width: 64, alignment: .trailing)
-                        }
-                        GeometryReader { proxy in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Theme.surfaceRaised)
-                                Capsule().fill(color.gradient)
-                                    .frame(width: max(proxy.size.width * share, 4))
-                            }
-                        }
-                        .frame(height: 6)
-                    }
-                    .padding(.vertical, 2)
+                    BreakdownRow(
+                        color: Theme.series[index % Theme.series.count],
+                        label: prettyModelName(slice.model),
+                        totalTokens: slice.totalTokens,
+                        estimatedCostUSD: slice.estimatedCostUSD,
+                        share: Double(slice.totalTokens) / Double(grandTotal)
+                    )
                 }
             }
         }
     }
+}
 
-    private func prettyModelName(_ id: String) -> String {
-        id.replacingOccurrences(of: "claude-", with: "")
-            .split(separator: "-")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
+/// Human-friendly model label shared by the breakdown card and drill-down rows.
+func prettyModelName(_ id: String) -> String {
+    id.replacingOccurrences(of: "claude-", with: "")
+        .split(separator: "-")
+        .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+        .joined(separator: " ")
+}
+
+// MARK: - Agent breakdown
+
+struct AgentBreakdownCard: View {
+    let slices: [UsageAnalytics.AgentSlice]
+
+    private var grandTotal: Int { max(slices.reduce(0) { $0 + $1.totalTokens }, 1) }
+
+    var body: some View {
+        Card(title: "By agent") {
+            if slices.isEmpty {
+                Text("No agent usage yet.")
+                    .foregroundStyle(Theme.textSecondary)
+            } else {
+                ForEach(Array(slices.enumerated()), id: \.element.id) { index, slice in
+                    BreakdownRow(
+                        color: agentColor(slice.agent),
+                        label: "\(slice.agent.displayName) · \(slice.sessions) sessions",
+                        totalTokens: slice.totalTokens,
+                        estimatedCostUSD: slice.estimatedCostUSD,
+                        share: Double(slice.totalTokens) / Double(grandTotal)
+                    )
+                }
+            }
+        }
     }
+}
+
+/// Stable per-agent tint used by the breakdown card and session-history badges.
+func agentColor(_ agent: AgentSource) -> Color {
+    let index = AgentSource.allCases.firstIndex(of: agent) ?? 0
+    return Theme.series[index % Theme.series.count]
 }
 
 // MARK: - Shared card chrome
