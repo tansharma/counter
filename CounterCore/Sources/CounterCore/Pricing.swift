@@ -63,6 +63,40 @@ public enum Pricing {
             inputPerMTok: 0.45, outputPerMTok: 3.0, cacheReadMultiplier: 0.25),
     ]
 
+    // MARK: Local models
+
+    /// Family prefixes of models that run locally (Ollama, LM Studio, llama.cpp).
+    /// Matched case-insensitively against the model id, which may carry an
+    /// Ollama-style size tag ("qwen2.5vl:7b") or a provider path ("ollama/qwen3").
+    public static let localModelPrefixes: [String] = [
+        "qwen", "llama", "codellama", "mistral", "mixtral", "deepseek", "gemma",
+        "phi", "smollm", "starcoder", "codegemma", "devstral", "granite", "olmo",
+        "ollama/", "lmstudio/", "local/",
+    ]
+
+    /// True when the model id looks like a locally served model. Ollama tags
+    /// (`name:size`) are also treated as local — cloud model ids don't use ":".
+    public static func isLocalModel(_ model: String) -> Bool {
+        let id = model.lowercased()
+        if localModelPrefixes.contains(where: { id.hasPrefix($0) }) { return true }
+        return id.contains(":") && rate(forModel: model) == nil
+    }
+
+    /// Reference rate used to value local-model tokens: what the same tokens would
+    /// have cost on a budget cloud coding model (haiku-class). An estimate by design.
+    public static let localReferenceRate = Rate(inputPerMTok: 1.0, outputPerMTok: 5.0)
+
+    /// Estimated USD the event would have cost on the reference cloud model —
+    /// zero for cloud events (they already cost real money).
+    public static func cloudEquivalentUSD(for event: UsageEvent) -> Double {
+        guard isLocalModel(event.model) else { return 0 }
+        let million = 1_000_000.0
+        let rate = localReferenceRate
+        let promptSide = Double(event.inputTokens + event.cacheCreationTokens
+            + event.cacheReadTokens) / million * rate.inputPerMTok
+        return promptSide + Double(event.outputTokens) / million * rate.outputPerMTok
+    }
+
     public static func rate(forModel model: String) -> Rate? {
         var best: (prefix: String, rate: Rate)?
         for (prefix, rate) in rates where model.hasPrefix(prefix) {
@@ -73,9 +107,10 @@ public enum Pricing {
         return best?.rate
     }
 
-    /// Estimated cost in USD for one event. Unknown models cost zero (shown as such).
+    /// Estimated cost in USD for one event. Local and unknown models cost zero
+    /// (the local guard keeps them free even if a matching cloud prefix is added).
     public static func estimatedCostUSD(for event: UsageEvent) -> Double {
-        guard let rate = rate(forModel: event.model) else { return 0 }
+        guard !isLocalModel(event.model), let rate = rate(forModel: event.model) else { return 0 }
         let million = 1_000_000.0
         let input = Double(event.inputTokens) / million * rate.inputPerMTok
         let output = Double(event.outputTokens) / million * rate.outputPerMTok
