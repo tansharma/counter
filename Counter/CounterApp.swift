@@ -24,7 +24,7 @@ struct CounterApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView()
+            SettingsView(store: store)
                 .preferredColorScheme(appearanceMode.colorScheme)
         }
     }
