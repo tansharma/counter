@@ -59,6 +59,55 @@ struct ProjectTimeCard: View {
     }
 }
 
+// MARK: - Local model usage
+
+/// Shown when any usage came from locally served models (Ollama-style ids):
+/// how much work ran locally and what it would have cost on a budget cloud model.
+struct LocalUsageCard: View {
+    let usage: UsageAnalytics.LocalUsage
+
+    var body: some View {
+        Card(title: "Local models") {
+            HStack(spacing: 0) {
+                stat(value: Format.tokens(usage.localTokens), label: "local tokens",
+                     color: Theme.positive)
+                divider
+                stat(value: String(format: "%.0f%%", usage.localShare * 100),
+                     label: "of all usage", color: Theme.accent)
+                divider
+                stat(value: "\(usage.localSessions)", label: "local sessions",
+                     color: Theme.warning)
+                divider
+                stat(value: Format.usd(usage.cloudEquivalentUSD),
+                     label: "est. cloud value avoided", color: Theme.positive)
+            }
+            Text("Models: \(usage.models.joined(separator: ", ")) — $0.00 per token. "
+                 + "Cloud value priced at a haiku-class reference rate; an estimate.")
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(Theme.surfaceRaised)
+            .frame(width: 1, height: 40)
+            .padding(.horizontal, 14)
+    }
+
+    private func stat(value: String, label: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value)
+                .font(Theme.numberFont(17))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - Fun facts strip
 
 struct FunFactsCard: View {
