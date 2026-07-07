@@ -87,7 +87,8 @@ public enum SessionLogParser {
                 cacheCreationTokens: event.cacheCreationTokens,
                 cacheReadTokens: event.cacheReadTokens,
                 projectPath: root,
-                sessionId: event.sessionId
+                sessionId: event.sessionId,
+                agent: event.agent
             )
         }
     }
@@ -127,21 +128,7 @@ public enum SessionLogParser {
         )
     }
 
-    // Timestamps arrive as ISO8601 with fractional seconds ("2026-07-03T11:32:17.602Z"),
-    // but tolerate the plain form too.
-    private static let fractionalFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let plainFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     private static func parseTimestamp(_ string: String) -> Date? {
-        fractionalFormatter.date(from: string) ?? plainFormatter.date(from: string)
+        LogTimestamp.parse(string)
     }
 }
