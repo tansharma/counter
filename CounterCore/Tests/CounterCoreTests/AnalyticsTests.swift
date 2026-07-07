@@ -23,7 +23,8 @@ final class AnalyticsTests: XCTestCase {
         cacheCreate: Int = 0,
         cacheRead: Int = 0,
         project: String = "/dev/alpha",
-        session: String = "s1"
+        session: String = "s1",
+        agent: AgentSource = .claude
     ) -> UsageEvent {
         UsageEvent(
             timestamp: date(iso),
@@ -33,7 +34,8 @@ final class AnalyticsTests: XCTestCase {
             cacheCreationTokens: cacheCreate,
             cacheReadTokens: cacheRead,
             projectPath: project,
-            sessionId: session
+            sessionId: session,
+            agent: agent
         )
     }
 
@@ -181,5 +183,68 @@ final class AnalyticsTests: XCTestCase {
         ]
         let busiest = UsageAnalytics.busiestDay(events, calendar: utcCalendar)
         XCTAssertEqual(busiest?.totalTokens, 900)
+    }
+
+    // MARK: Agents
+
+    func testByAgentGroupsAndSortsLargestFirst() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", input: 10, output: 5, session: "s1", agent: .claude),
+            event(at: "2026-07-01T10:05:00Z", input: 1000, output: 500, session: "codex:a", agent: .codex),
+            event(at: "2026-07-01T10:10:00Z", input: 100, output: 50, session: "codex:b", agent: .codex),
+        ]
+        let slices = UsageAnalytics.byAgent(events)
+        XCTAssertEqual(slices.count, 2)
+        XCTAssertEqual(slices[0].agent, .codex)
+        XCTAssertEqual(slices[0].totalTokens, 1650)
+        XCTAssertEqual(slices[0].outputTokens, 550)
+        XCTAssertEqual(slices[0].sessions, 2)
+        XCTAssertEqual(slices[1].agent, .claude)
+        XCTAssertEqual(slices[1].sessions, 1)
+    }
+
+    func testAgentSurvivesSessionRootNormalization() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", project: "/dev/alpha", session: "codex:a", agent: .codex),
+            event(at: "2026-07-01T10:05:00Z", project: "/dev/alpha/sub", session: "codex:a", agent: .codex),
+        ]
+        let normalized = SessionLogParser.normalizeToSessionRoot(events)
+        XCTAssertEqual(normalized.map(\.projectPath), ["/dev/alpha", "/dev/alpha"])
+        XCTAssertEqual(normalized.map(\.agent), [.codex, .codex])
+    }
+
+    // MARK: Session summaries (project drill-down)
+
+    func testSessionSummariesFiltersSortsAndComputes() {
+        let events = [
+            // Session s1 in alpha: 2 minutes apart, well under the gap cap.
+            event(at: "2026-07-01T10:00:00Z", model: "claude-sonnet-5", input: 100, output: 10, session: "s1"),
+            event(at: "2026-07-01T10:02:00Z", model: "claude-opus-4-8", input: 900, output: 90, session: "s1"),
+            // Newer session s2 in alpha, single event.
+            event(at: "2026-07-02T09:00:00Z", input: 50, output: 5, session: "s2", agent: .gemini),
+            // Different project must be excluded.
+            event(at: "2026-07-01T12:00:00Z", project: "/dev/beta", session: "s3"),
+        ]
+        let summaries = UsageAnalytics.sessionSummaries(forProject: "/dev/alpha", in: events)
+
+        XCTAssertEqual(summaries.map(\.sessionId), ["s2", "s1"]) // newest first
+        let s1 = try! XCTUnwrap(summaries.last)
+        XCTAssertEqual(s1.agent, .claude)
+        XCTAssertEqual(s1.start, date("2026-07-01T10:00:00Z"))
+        XCTAssertEqual(s1.end, date("2026-07-01T10:02:00Z"))
+        XCTAssertEqual(s1.activeSeconds, 120)
+        XCTAssertEqual(s1.totalTokens, 1100)
+        XCTAssertEqual(s1.eventCount, 2)
+        XCTAssertEqual(s1.models, ["claude-opus-4-8", "claude-sonnet-5"]) // by token share
+        XCTAssertEqual(summaries.first?.agent, .gemini)
+    }
+
+    func testSessionSummariesCapIdleGaps() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", session: "s1"),
+            event(at: "2026-07-01T12:00:00Z", session: "s1"), // 2h idle gap
+        ]
+        let summaries = UsageAnalytics.sessionSummaries(forProject: "/dev/alpha", in: events)
+        XCTAssertEqual(summaries.first?.activeSeconds, 300) // capped at the default
     }
 }
