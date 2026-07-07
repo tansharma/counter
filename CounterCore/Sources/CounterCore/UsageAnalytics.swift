@@ -53,6 +53,30 @@ public enum UsageAnalytics {
             .sorted { $0.totalTokens > $1.totalTokens }
     }
 
+    public struct AgentSlice: Equatable, Identifiable, Sendable {
+        public var id: String { agent.rawValue }
+        public let agent: AgentSource
+        public let totalTokens: Int
+        public let outputTokens: Int
+        public let sessions: Int
+        public let estimatedCostUSD: Double
+    }
+
+    /// Per-agent breakdown, largest total first.
+    public static func byAgent(_ events: [UsageEvent]) -> [AgentSlice] {
+        Dictionary(grouping: events, by: \.agent)
+            .map { agent, group in
+                AgentSlice(
+                    agent: agent,
+                    totalTokens: group.reduce(0) { $0 + $1.totalTokens },
+                    outputTokens: group.reduce(0) { $0 + $1.outputTokens },
+                    sessions: Set(group.map(\.sessionId)).count,
+                    estimatedCostUSD: group.reduce(0) { $0 + Pricing.estimatedCostUSD(for: $1) }
+                )
+            }
+            .sorted { $0.totalTokens > $1.totalTokens }
+    }
+
     public struct DayBucket: Equatable, Identifiable, Sendable {
         public var id: Date { day }
         public let day: Date
@@ -75,7 +99,7 @@ public enum UsageAnalytics {
 
     // MARK: Projects
 
-    public struct ProjectSlice: Equatable, Identifiable, Sendable {
+    public struct ProjectSlice: Equatable, Hashable, Identifiable, Sendable {
         public var id: String { path }
         public let path: String
         public let name: String
@@ -106,6 +130,54 @@ public enum UsageAnalytics {
                 )
             }
             .sorted { $0.totalTokens > $1.totalTokens }
+    }
+
+    public struct SessionSummary: Equatable, Identifiable, Sendable {
+        public var id: String { sessionId }
+        public let sessionId: String
+        public let agent: AgentSource
+        public let start: Date
+        public let end: Date
+        /// Gap-capped active time, same rule as `byProject`.
+        public let activeSeconds: TimeInterval
+        public let totalTokens: Int
+        public let estimatedCostUSD: Double
+        /// Distinct models, largest token share first.
+        public let models: [String]
+        public let eventCount: Int
+    }
+
+    /// One row per session in the given project, newest first — the project
+    /// drill-down's history list.
+    public static func sessionSummaries(
+        forProject path: String,
+        in events: [UsageEvent],
+        gapCap: TimeInterval = 300
+    ) -> [SessionSummary] {
+        Dictionary(grouping: events.filter { $0.projectPath == path }, by: \.sessionId)
+            .compactMap { sessionId, group -> SessionSummary? in
+                let sorted = group.sorted { $0.timestamp < $1.timestamp }
+                guard let first = sorted.first, let last = sorted.last else { return nil }
+                var active: TimeInterval = 0
+                for (previous, next) in zip(sorted, sorted.dropFirst()) {
+                    active += min(next.timestamp.timeIntervalSince(previous.timestamp), gapCap)
+                }
+                let tokensByModel = Dictionary(grouping: sorted, by: \.model)
+                    .mapValues { $0.reduce(0) { $0 + $1.totalTokens } }
+                return SessionSummary(
+                    sessionId: sessionId,
+                    agent: first.agent,
+                    start: first.timestamp,
+                    end: last.timestamp,
+                    activeSeconds: active,
+                    totalTokens: sorted.reduce(0) { $0 + $1.totalTokens },
+                    estimatedCostUSD: sorted.reduce(0) { $0 + Pricing.estimatedCostUSD(for: $1) },
+                    models: tokensByModel.sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+                        .map(\.key),
+                    eventCount: sorted.count
+                )
+            }
+            .sorted { $0.start > $1.start }
     }
 
     // MARK: 5-hour blocks
