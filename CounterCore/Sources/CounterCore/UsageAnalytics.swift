@@ -77,6 +77,41 @@ public enum UsageAnalytics {
             .sorted { $0.totalTokens > $1.totalTokens }
     }
 
+    // MARK: Local vs cloud
+
+    public struct LocalUsage: Equatable, Sendable {
+        public let localTokens: Int
+        public let localOutputTokens: Int
+        public let localEvents: Int
+        public let localSessions: Int
+        /// Local tokens as a share of all tokens (0...1).
+        public let localShare: Double
+        /// What the local tokens would have cost on a budget cloud model.
+        public let cloudEquivalentUSD: Double
+        /// Distinct local model ids, largest token share first.
+        public let models: [String]
+    }
+
+    /// Aggregates locally served model usage (Ollama-style ids), or nil when none.
+    public static func localUsage(_ events: [UsageEvent]) -> LocalUsage? {
+        let local = events.filter { Pricing.isLocalModel($0.model) }
+        guard !local.isEmpty else { return nil }
+        let allTokens = events.reduce(0) { $0 + $1.totalTokens }
+        let localTokens = local.reduce(0) { $0 + $1.totalTokens }
+        let tokensByModel = Dictionary(grouping: local, by: \.model)
+            .mapValues { $0.reduce(0) { $0 + $1.totalTokens } }
+        return LocalUsage(
+            localTokens: localTokens,
+            localOutputTokens: local.reduce(0) { $0 + $1.outputTokens },
+            localEvents: local.count,
+            localSessions: Set(local.map(\.sessionId)).count,
+            localShare: allTokens > 0 ? Double(localTokens) / Double(allTokens) : 0,
+            cloudEquivalentUSD: local.reduce(0) { $0 + Pricing.cloudEquivalentUSD(for: $1) },
+            models: tokensByModel.sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+                .map(\.key)
+        )
+    }
+
     public struct DayBucket: Equatable, Identifiable, Sendable {
         public var id: Date { day }
         public let day: Date
