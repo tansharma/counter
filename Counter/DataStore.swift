@@ -71,6 +71,7 @@ final class DataStore {
     var modelSlices: [UsageAnalytics.ModelSlice] { UsageAnalytics.byModel(events) }
     var projectSlices: [UsageAnalytics.ProjectSlice] { UsageAnalytics.byProject(events) }
     var agentSlices: [UsageAnalytics.AgentSlice] { UsageAnalytics.byAgent(events) }
+    var localUsage: UsageAnalytics.LocalUsage? { UsageAnalytics.localUsage(events) }
     var currentBlock: UsageAnalytics.Block? { UsageAnalytics.currentBlock(events, now: .now) }
     var streakDays: Int { UsageAnalytics.currentStreakDays(events) }
     var cacheEfficiency: Double { UsageAnalytics.cacheEfficiency(events) }
