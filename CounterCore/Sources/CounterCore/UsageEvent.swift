@@ -1,6 +1,26 @@
 import Foundation
 
-/// One billable assistant turn extracted from a Claude Code session log.
+/// Which local tool produced a usage event. Counter reads each agent's own
+/// on-disk session logs; the raw value doubles as a stable settings key suffix.
+public enum AgentSource: String, CaseIterable, Codable, Sendable, Identifiable {
+    case claude
+    case codex
+    case gemini
+    case opencode
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .claude: "Claude Code"
+        case .codex: "Codex"
+        case .gemini: "Gemini CLI"
+        case .opencode: "OpenCode"
+        }
+    }
+}
+
+/// One billable assistant turn extracted from an agent session log.
 public struct UsageEvent: Equatable, Sendable {
     public let timestamp: Date
     public let model: String
@@ -11,6 +31,7 @@ public struct UsageEvent: Equatable, Sendable {
     /// Working directory of the session (used to group by project).
     public let projectPath: String
     public let sessionId: String
+    public let agent: AgentSource
 
     public init(
         timestamp: Date,
@@ -20,7 +41,8 @@ public struct UsageEvent: Equatable, Sendable {
         cacheCreationTokens: Int,
         cacheReadTokens: Int,
         projectPath: String,
-        sessionId: String
+        sessionId: String,
+        agent: AgentSource = .claude
     ) {
         self.timestamp = timestamp
         self.model = model
@@ -30,6 +52,7 @@ public struct UsageEvent: Equatable, Sendable {
         self.cacheReadTokens = cacheReadTokens
         self.projectPath = projectPath
         self.sessionId = sessionId
+        self.agent = agent
     }
 
     /// Every token the API processed for this turn.
