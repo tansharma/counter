@@ -116,7 +116,8 @@ struct ModelBreakdownCard: View {
                 ForEach(Array(slices.enumerated()), id: \.element.id) { index, slice in
                     BreakdownRow(
                         color: Theme.series[index % Theme.series.count],
-                        label: prettyModelName(slice.model),
+                        label: prettyModelName(slice.model)
+                            + (Pricing.isLocalModel(slice.model) ? " · local" : ""),
                         totalTokens: slice.totalTokens,
                         estimatedCostUSD: slice.estimatedCostUSD,
                         share: Double(slice.totalTokens) / Double(grandTotal)
