@@ -64,6 +64,28 @@ final class PricingTests: XCTestCase {
         XCTAssertEqual(claudeSavings, 3.0 * 0.9, accuracy: 0.0001)
     }
 
+    func testLocalModelDetection() {
+        XCTAssertTrue(Pricing.isLocalModel("qwen2.5vl:7b"))
+        XCTAssertTrue(Pricing.isLocalModel("qwen2.5-coder"))
+        XCTAssertTrue(Pricing.isLocalModel("llama3.3:70b"))
+        XCTAssertTrue(Pricing.isLocalModel("DeepSeek-R1:8b"))
+        XCTAssertTrue(Pricing.isLocalModel("ollama/mymodel"))
+        XCTAssertTrue(Pricing.isLocalModel("custom-model:latest")) // ollama tag heuristic
+        XCTAssertFalse(Pricing.isLocalModel("claude-sonnet-5"))
+        XCTAssertFalse(Pricing.isLocalModel("gpt-5-codex"))
+        XCTAssertFalse(Pricing.isLocalModel("gemini-2.5-pro"))
+    }
+
+    func testLocalModelCostsZeroButHasCloudEquivalent() {
+        let local = event(model: "qwen2.5vl:7b", input: 1_000_000, output: 1_000_000)
+        XCTAssertEqual(Pricing.estimatedCostUSD(for: local), 0)
+        // Reference rate: 1.0 in + 5.0 out per MTok.
+        XCTAssertEqual(Pricing.cloudEquivalentUSD(for: local), 6.0, accuracy: 0.0001)
+        // Cloud models have no "cloud equivalent" — they already cost real money.
+        XCTAssertEqual(
+            Pricing.cloudEquivalentUSD(for: event(model: "claude-sonnet-5", input: 1_000_000)), 0)
+    }
+
     func testUnknownModelCostsZero() {
         XCTAssertEqual(
             Pricing.estimatedCostUSD(for: event(model: "mystery-model", input: 1_000_000)), 0)
