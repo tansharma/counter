@@ -25,6 +25,9 @@ struct DashboardView: View {
                         if store.agentSlices.count > 1 {
                             AgentBreakdownCard(slices: store.agentSlices)
                         }
+                        if let local = store.localUsage {
+                            LocalUsageCard(usage: local)
+                        }
                         FunFactsCard(store: store)
                     }
                     .padding(20)
