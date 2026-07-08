@@ -14,8 +14,9 @@ public enum UsageAnalytics {
         public let cacheCreationTokens: Int
         public let cacheReadTokens: Int
         public let estimatedCostUSD: Double
+        /// New tokens only (excludes cache reads) — see `UsageEvent.newTokens`.
         public var totalTokens: Int {
-            inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens
+            inputTokens + outputTokens + cacheCreationTokens
         }
     }
 
@@ -45,7 +46,7 @@ public enum UsageAnalytics {
             .map { model, group in
                 ModelSlice(
                     model: model,
-                    totalTokens: group.reduce(0) { $0 + $1.totalTokens },
+                    totalTokens: group.reduce(0) { $0 + $1.newTokens },
                     outputTokens: group.reduce(0) { $0 + $1.outputTokens },
                     estimatedCostUSD: group.reduce(0) { $0 + Pricing.estimatedCostUSD(for: $1) }
                 )
@@ -68,7 +69,7 @@ public enum UsageAnalytics {
             .map { agent, group in
                 AgentSlice(
                     agent: agent,
-                    totalTokens: group.reduce(0) { $0 + $1.totalTokens },
+                    totalTokens: group.reduce(0) { $0 + $1.newTokens },
                     outputTokens: group.reduce(0) { $0 + $1.outputTokens },
                     sessions: Set(group.map(\.sessionId)).count,
                     estimatedCostUSD: group.reduce(0) { $0 + Pricing.estimatedCostUSD(for: $1) }
@@ -96,10 +97,10 @@ public enum UsageAnalytics {
     public static func localUsage(_ events: [UsageEvent]) -> LocalUsage? {
         let local = events.filter { Pricing.isLocalModel($0.model) }
         guard !local.isEmpty else { return nil }
-        let allTokens = events.reduce(0) { $0 + $1.totalTokens }
-        let localTokens = local.reduce(0) { $0 + $1.totalTokens }
+        let allTokens = events.reduce(0) { $0 + $1.newTokens }
+        let localTokens = local.reduce(0) { $0 + $1.newTokens }
         let tokensByModel = Dictionary(grouping: local, by: \.model)
-            .mapValues { $0.reduce(0) { $0 + $1.totalTokens } }
+            .mapValues { $0.reduce(0) { $0 + $1.newTokens } }
         return LocalUsage(
             localTokens: localTokens,
             localOutputTokens: local.reduce(0) { $0 + $1.outputTokens },
@@ -125,7 +126,7 @@ public enum UsageAnalytics {
             .map { day, group in
                 DayBucket(
                     day: day,
-                    totalTokens: group.reduce(0) { $0 + $1.totalTokens },
+                    totalTokens: group.reduce(0) { $0 + $1.newTokens },
                     estimatedCostUSD: group.reduce(0) { $0 + Pricing.estimatedCostUSD(for: $1) }
                 )
             }
@@ -159,7 +160,7 @@ public enum UsageAnalytics {
                 return ProjectSlice(
                     path: path,
                     name: sorted.first?.projectName ?? "unknown",
-                    totalTokens: group.reduce(0) { $0 + $1.totalTokens },
+                    totalTokens: group.reduce(0) { $0 + $1.newTokens },
                     activeSeconds: active,
                     sessions: Set(group.map(\.sessionId)).count
                 )
@@ -198,14 +199,14 @@ public enum UsageAnalytics {
                     active += min(next.timestamp.timeIntervalSince(previous.timestamp), gapCap)
                 }
                 let tokensByModel = Dictionary(grouping: sorted, by: \.model)
-                    .mapValues { $0.reduce(0) { $0 + $1.totalTokens } }
+                    .mapValues { $0.reduce(0) { $0 + $1.newTokens } }
                 return SessionSummary(
                     sessionId: sessionId,
                     agent: first.agent,
                     start: first.timestamp,
                     end: last.timestamp,
                     activeSeconds: active,
-                    totalTokens: sorted.reduce(0) { $0 + $1.totalTokens },
+                    totalTokens: sorted.reduce(0) { $0 + $1.newTokens },
                     estimatedCostUSD: sorted.reduce(0) { $0 + Pricing.estimatedCostUSD(for: $1) },
                     models: tokensByModel.sorted { ($0.value, $1.key) > ($1.value, $0.key) }
                         .map(\.key),
