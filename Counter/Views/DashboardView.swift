@@ -4,8 +4,6 @@ import CounterCore
 struct DashboardView: View {
     let store: DataStore
     @AppStorage("displayNameOverride") private var displayNameOverride = ""
-    @AppStorage("blockBudgetMTok") private var blockBudgetMTok = 25.0
-    @AppStorage("weeklyBudgetMTok") private var weeklyBudgetMTok = 300.0
     @State private var now = Date.now
 
     var body: some View {
@@ -101,9 +99,15 @@ struct DashboardView: View {
                 Text(Format.tokens(store.totals.totalTokens))
                     .font(Theme.displayFont(30))
                     .foregroundStyle(Theme.accent)
-                Text("lifetime tokens · est. \(Format.usd(store.totals.estimatedCostUSD)) equivalent")
+                Text("lifetime tokens (new) · est. \(Format.usd(store.totals.estimatedCostUSD)) equiv.")
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
+                    .help("""
+                        Input + output + cache-creation tokens, across all time and all \
+                        enabled sources. Cache-read tokens (context re-sent from cache on \
+                        every turn) are tracked separately in Vitals below, and in the \
+                        Session Usage / This Week gauges, not counted here.
+                        """)
             }
         }
         .padding(.bottom, 4)
@@ -112,7 +116,7 @@ struct DashboardView: View {
     // MARK: Gauges
 
     private var gaugeRow: some View {
-        Card(title: "Current 5-hour block") {
+        Card {
             HStack(spacing: 24) {
                 blockUsageGauge
                 blockResetGauge
@@ -120,40 +124,76 @@ struct DashboardView: View {
                 Spacer(minLength: 0)
                 blockCaption
             }
+            .help("""
+                Session Usage and This Week sum every enabled source — Codex, Gemini CLI, \
+                and OpenCode all count here. Each ring shows new tokens vs. cache-read \
+                (context re-sent from cache on every turn); a long session can rack up a \
+                huge cache-read share while staying tiny in genuinely new tokens. Claude \
+                Block Reset is the one gauge that's still Claude Code only, since only \
+                Anthropic's plans have this kind of rate-limit window to count down.
+                """)
         }
     }
 
-    private var blockTokens: Int { store.currentBlock?.totalTokens ?? 0 }
-    private var blockBudget: Double { blockBudgetMTok * 1_000_000 }
+    /// Composition of a set of token counts into a new/cache-read share pair — feeds the
+    /// two gauges below now that there's no budget to compare against, just "how much of
+    /// this was genuinely new work vs. reused context."
+    private func newShare(new: Int, total: Int) -> Double {
+        total > 0 ? Double(new) / Double(total) : 0
+    }
+
+    private var blockNewTokens: Int { store.currentBlockAllAgents?.newTokens ?? 0 }
+    private var blockCacheReadTokens: Int { (store.currentBlockAllAgents?.totalTokens ?? 0) - blockNewTokens }
 
     private var blockUsageGauge: some View {
         SpeedometerView(
-            title: "Block usage",
-            value: Double(blockTokens) / max(blockBudget, 1),
-            centerLabel: Format.tokens(blockTokens),
-            subLabel: "of \(Int(blockBudgetMTok))M budget"
+            title: "Session Usage",
+            value: 1,
+            centerLabel: Format.tokens(blockNewTokens),
+            subLabel: "",
+            accent: Theme.positive,
+            innerValue: newShare(new: blockNewTokens, total: blockNewTokens + blockCacheReadTokens),
+            innerAccent: Theme.accent,
+            showsLegend: true,
+            innerLegendValue: Format.tokens(blockNewTokens),
+            outerLegendValue: Format.tokens(blockCacheReadTokens)
         )
     }
 
+    /// No needle, so progress reads as a two-phase fill instead: the first 3.5h fill in
+    /// `Theme.accent` (elapsed, growing left-to-right) up to the 70% mark, then the
+    /// final 1.5h fill in `Theme.positive` (imminent reset) from there onward — reusing
+    /// the same two-segment mechanic as the composition gauges, just with a fixed
+    /// threshold instead of a data-driven share.
     private var blockResetGauge: some View {
         let end = store.currentBlock?.end
         let remaining = end.map { max(0, $0.timeIntervalSince(now)) } ?? 0
+        let blockLength: Double = 5 * 3600
         return SpeedometerView(
-            title: "Block resets in",
-            value: 1 - (remaining / (5 * 3600)),
+            title: "Claude Block Reset",
+            value: 1 - (remaining / blockLength),
             centerLabel: end.map { Format.countdown(to: $0, from: now) } ?? "—",
             subLabel: end == nil ? "no active block" : "h:mm remaining",
-            accent: Theme.positive
+            accent: Theme.positive,
+            innerValue: 1 - (1.5 * 3600 / blockLength),
+            innerAccent: Theme.accent
         )
     }
 
     private var weeklyGauge: some View {
-        SpeedometerView(
+        let weeklyNew = store.tokensThisWeekNew
+        let weeklyCacheRead = store.tokensThisWeek - weeklyNew
+        return SpeedometerView(
             title: "This week",
-            value: Double(store.tokensThisWeek) / max(weeklyBudgetMTok * 1_000_000, 1),
-            centerLabel: Format.tokens(store.tokensThisWeek),
-            subLabel: "of \(Int(weeklyBudgetMTok))M budget",
-            accent: Theme.warning
+            value: 1,
+            centerLabel: Format.tokens(weeklyNew),
+            subLabel: "",
+            accent: Theme.positive,
+            innerValue: newShare(new: weeklyNew, total: weeklyNew + weeklyCacheRead),
+            innerAccent: Theme.accent,
+            showsLegend: true,
+            innerLegendValue: Format.tokens(weeklyNew),
+            outerLegendValue: Format.tokens(weeklyCacheRead)
         )
     }
 
@@ -166,8 +206,6 @@ struct DashboardView: View {
                 Text("No usage in the current window —")
                 Text("your next message opens a fresh block.")
             }
-            Text("Budgets are estimates; tune them in Settings (⌘,).")
-                .foregroundStyle(Theme.textSecondary)
         }
         .font(.system(size: 11, design: .rounded))
         .foregroundStyle(Theme.textSecondary)
