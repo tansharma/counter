@@ -222,6 +222,10 @@ public enum UsageAnalytics {
         public let start: Date
         public let end: Date
         public let totalTokens: Int
+        /// Same window, excluding cache-read — see `UsageEvent.newTokens`. A cache-heavy
+        /// block (whole conversation re-sent as context each turn) can make `totalTokens`
+        /// look enormous next to this; both are correct, just different questions.
+        public let newTokens: Int
         public let outputTokens: Int
     }
 
@@ -270,6 +274,7 @@ public enum UsageAnalytics {
             start: open.start,
             end: open.start.addingTimeInterval(blockLength),
             totalTokens: open.members.reduce(0) { $0 + $1.totalTokens },
+            newTokens: open.members.reduce(0) { $0 + $1.newTokens },
             outputTokens: open.members.reduce(0) { $0 + $1.outputTokens }
         )
     }
