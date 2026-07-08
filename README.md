@@ -20,7 +20,7 @@
 **Counter** is a native, macOS-first (iOS-ready) SwiftUI app that reads session logs your agents write to disk and turns them into a usage dashboard.
 
 It is **local** : no network calls, no API keys, no accounts. It never writes to any agent's
-data, just reads it. Everything you configure (budgets, name, appearance, sources) lives in `UserDefaults`.
+data, just reads it. Everything you configure (name, appearance, sources) lives in `UserDefaults`.
 
 
 Originally, I just wanted to track my Claude Code usage; mapping out the 5-hour reset blocks and keeping tabs on how much time, money, and tokens I was burning through per model. But as I started flipping between different models for different projects, the tool kind of took on a life of its own. 
@@ -32,9 +32,9 @@ Now, it's evolved into a (still slightly restricted) multi agent dashboard that 
 ## Features
 
 ### At a glance
--	**Three tachometer gauges** - Keeps track of your current 5-hour block usage vs budget, a live reset countdown, and your weekly budget. They all come with actual needles, redline zones, and animated fills so you know exactly where you stand.
+-	**Three tachometer gauges** - "Session Usage" and "This Week" show new tokens vs. cache-read as a composition ring, summed across every enabled source (no budget to compare against — Anthropic doesn't expose one locally, and one cache-heavy session made a fixed-budget number meaningless anyway), with a "Claude Block Reset" countdown alongside them. All three replace the old sweeping needle with tick marks that light up as they fill. "Claude Block Reset" is the one gauge that's **Claude Code only** — it's counting down Anthropic's own rate-limit window, which Codex/Gemini/OpenCode don't have.
 
-- **The header card** - Grabs your display name and Claude plan tier straight from ~/.claude.json, alongside live lifetime totals and estimated cost equivalents.
+- **The header card** - Grabs your display name and Claude plan tier straight from ~/.claude.json, alongside live lifetime totals (input + output + cache-creation, across every enabled source — cache-read tokens are tracked separately, see below) and estimated cost equivalents.
 
 ### Where it all goes
 - **Usage-over-time bar chart** -  Has a quick 7 / 30 / 90-day range picker so you can spot trends.
@@ -45,13 +45,15 @@ Now, it's evolved into a (still slightly restricted) multi agent dashboard that 
 
 -	**Agent breakdown card** - This only shows up once you actually start pulling data from more than one agent, keeping the UI clean.
 
+-	**Vitals strip** - Streaks, session count, busiest day, cost saved by caching, and the raw cache-read token count (context re-sent from cache every turn — not counted in the lifetime total above it).
+
 ### Project drill-down
 -	You can click any project to dive into a detailed view. It pulls  specific totals, project-filtered usage chart, model/agent breakdowns, and a scrollable session history.
 
 ### Menu-bar companion
--	A MenuBarExtra companion app where the icon itself is a miniature gauge that fills up based on your current block's usage.
+-	A MenuBarExtra companion app where the icon itself is a miniature ring, split new-vs-cache-read just like the dashboard's Session Usage gauge.
 
--	The dropdown displays block tokens, a live reset countdown, today's total spend, and quick buttons to open the dashboard or quit. Plus, it stays live in the background even if you close the main window.
+-	The dropdown displays this session's new/cache-read tokens, a live reset countdown, today's total spend, and quick buttons to open the dashboard or quit. Plus, it stays live in the background even if you close the main window.
 
 ### Multi agent and local models
 -	You can toggle sources on or off in Settings (if an agent isn't detected, it just displays as "not detected").
@@ -131,12 +133,10 @@ Then open `Counter.xcodeproj` and run, or launch the built `.app`.
 
 There are a number of caveats and assumptions you should bear in mind. Read these before trusting a number:
 
-- Limits are estimates, not absolute ground truth. 
-  
-  No agent actually exposes your real plan limits on disk (and if it does i havent found a way to read that), so the gauges are just comparing your usage against the budgets you set up in Settings. 
-  
-  For reference: during a Claude Pro calibration run, I hit 100% of a 5-hour block at roughly 20.6M raw tokens, meaning the default 25M budget is probably a tad high. Definitely tune it to match your own plan
+- There's no plan-limit number anywhere, on purpose.
 
+  No agent actually exposes your real plan limits on disk (and if it does i havent found a way to read that), so rather than have you guess at a budget in Settings, "Session Usage" and "This Week" just show composition instead — new tokens vs. cache-read, as a ring with no denominator to argue about. 
+  
 - The 5-hour block is reconstructed. 
 
   A block opens at the very first event after a quiet gap, floors it to the top of the hour, and stretches for 5 hours. Because of that hour-flooring, the dashboard's countdown might run up to an hour earlier than the agent’s actual reset (which typically triggers off your exact first-message time).
@@ -145,9 +145,11 @@ There are a number of caveats and assumptions you should bear in mind. Read thes
 
   Pricing lives in a hardcoded offline table. The dashboard is strictly no-network by design. The OpenAI and Gemini rows, in particular, are best-effort guesses (feel free to add those or let me know and I'll add them).
 
-- Token totals are just raw sums. 
-  
-  Input, output, cache-creation, and cache-reads are all thrown together at full weight. An agent’s internal "% used" metric is usually weighted since cache reads cost a fraction of the price, so a fixed token budget will never perfectly track it across different cache mixes.
+- Two different token totals, on purpose.
+
+  The lifetime total, model/project/agent breakdowns, and session history all count input + output + cache-creation tokens — not cache-reads, which get re-sent from cache on nearly every turn and would otherwise dwarf everything else (in practice, often 90%+ of the raw total). That cache-read count is shown on its own in the Vitals strip instead.
+
+  "Session Usage" and "This Week" show the same split, just scoped to the current block/week instead of all time: the big number is new tokens, and cache-read gets its own labeled number in the legend underneath. Since a single long session can rack up tens of millions of raw cache-read tokens while contributing only a few hundred thousand genuinely new ones, these two gauges are drawn as a fully-filled ring divided by that ratio (not a fraction of some budget) — the composition is the point, not a total vs. a limit. Progress on all three tachometers (these two plus the reset countdown) is shown by the tick marks lighting up in sequence, not a sweeping needle.
 
 - Local models use a reference rate. 
   
@@ -158,7 +160,7 @@ There are a number of caveats and assumptions you should bear in mind. Read thes
   - Gemini's token fields are cumulative per session, so I turn them into deltas. 
   - Finally, OpenCode’s SQLite backend isn't parsed yet, so DB-only installs will just show up as "not detected."
 
-- Multiple enabled sources pool together. Budgets and gauges sum up across every single source you toggle on. It's a combined workspace view, not a per-agent breakdown.
+- Multiple enabled sources pool together — except Claude Block Reset. Every chart, total, and breakdown sums across every source you toggle on (a combined workspace view, not a per-agent breakdown), including Session Usage and This Week — except the Claude Block Reset countdown, which only ever counts Claude Code, since it's tracking Anthropic's own rate-limit window regardless of what else is enabled.
 
 - Session cwd can drift. If you do a mid-run cd or rename a project folder, things can get messy. The app handles this by pinning each session to its dominant root, but it's a heuristic, not a guarantee.
 
