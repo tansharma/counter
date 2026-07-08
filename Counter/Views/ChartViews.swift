@@ -172,16 +172,18 @@ func agentColor(_ agent: AgentSource) -> Color {
 // MARK: - Shared card chrome
 
 struct Card<Content: View>: View {
-    let title: String
+    var title: String? = nil
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(Theme.textSecondary)
-                .textCase(.uppercase)
-                .kerning(1.2)
+            if let title {
+                Text(title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+                    .textCase(.uppercase)
+                    .kerning(1.2)
+            }
             content
         }
         .padding(18)
