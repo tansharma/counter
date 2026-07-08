@@ -6,17 +6,17 @@ import AppKit
 
 // MARK: - Icon
 
-/// A miniature tachometer arc for the menu bar, sharing the big gauge's 150°/240°
-/// geometry. Fills with the current block's usage vs budget; goes redline past 80%.
-/// Drawn with alpha-distinct track/fill so it still reads if the system renders the
-/// menu-bar label as a monochrome template.
+/// A miniature tachometer ring for the menu bar, mirroring the dashboard's composition
+/// gauges: always fully drawn, split by `newShare` into new tokens (accent) vs.
+/// cache-read (positive/teal) — there's no budget to compare against, just "how much of
+/// the current block was genuinely new work."
 struct MenuBarGaugeIcon: View {
-    let fraction: Double
+    let newShare: Double
     var size: CGFloat = 18
 
     private let startAngle = 150.0
     private let sweep = 240.0
-    private var clamped: Double { min(max(fraction, 0), 1) }
+    private var clampedShare: Double { min(max(newShare, 0), 1) }
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -26,13 +26,13 @@ struct MenuBarGaugeIcon: View {
             let track = StrokeStyle(lineWidth: lineWidth, lineCap: .round)
 
             context.stroke(
-                arc(in: rect, from: 0, to: 1),
-                with: .color(Theme.textSecondary.opacity(0.35)),
+                arc(in: rect, from: 0, to: clampedShare),
+                with: .color(Theme.accent),
                 style: track
             )
             context.stroke(
-                arc(in: rect, from: 0, to: clamped),
-                with: .color(clamped >= 0.8 ? Theme.danger : Theme.accent),
+                arc(in: rect, from: clampedShare, to: 1),
+                with: .color(Theme.positive),
                 style: track
             )
         }
@@ -59,11 +59,12 @@ struct MenuBarGaugeIcon: View {
 /// closed (the dashboard's own loop only runs while its window is open).
 struct MenuBarLabel: View {
     let store: DataStore
-    @AppStorage("blockBudgetMTok") private var blockBudgetMTok = 25.0
     @Environment(\.displayScale) private var displayScale
 
-    private var fraction: Double {
-        Double(store.currentBlock?.totalTokens ?? 0) / max(blockBudgetMTok * 1_000_000, 1)
+    private var newShare: Double {
+        let total = store.currentBlockAllAgents?.totalTokens ?? 0
+        guard total > 0 else { return 0 }
+        return Double(store.currentBlockAllAgents?.newTokens ?? 0) / Double(total)
     }
 
     var body: some View {
@@ -88,18 +89,18 @@ struct MenuBarLabel: View {
             Image(systemName: "gauge.with.dots.needle.bottom.50percent")
         }
         #else
-        MenuBarGaugeIcon(fraction: fraction)
+        MenuBarGaugeIcon(newShare: newShare)
         #endif
     }
 
     #if os(macOS)
     private var renderedIcon: NSImage? {
         let renderer = ImageRenderer(
-            content: MenuBarGaugeIcon(fraction: fraction, size: 18).frame(width: 18, height: 18)
+            content: MenuBarGaugeIcon(newShare: newShare, size: 18).frame(width: 18, height: 18)
         )
         renderer.scale = displayScale
         guard let image = renderer.nsImage else { return nil }
-        // Non-template so the accent/redline colour survives in the menu bar.
+        // Non-template so the new/cache-read colours survive in the menu bar.
         image.isTemplate = false
         return image
     }
@@ -112,12 +113,13 @@ struct MenuBarLabel: View {
 /// and a button to bring up the dashboard. Read-only over the shared DataStore.
 struct MenuBarContentView: View {
     let store: DataStore
-    @AppStorage("blockBudgetMTok") private var blockBudgetMTok = 25.0
     @Environment(\.openWindow) private var openWindow
 
-    private var blockTokens: Int { store.currentBlock?.totalTokens ?? 0 }
-    private var fraction: Double {
-        Double(blockTokens) / max(blockBudgetMTok * 1_000_000, 1)
+    private var blockNewTokens: Int { store.currentBlockAllAgents?.newTokens ?? 0 }
+    private var blockCacheReadTokens: Int { (store.currentBlockAllAgents?.totalTokens ?? 0) - blockNewTokens }
+    private var newShare: Double {
+        let total = blockNewTokens + blockCacheReadTokens
+        return total > 0 ? Double(blockNewTokens) / Double(total) : 0
     }
 
     var body: some View {
@@ -151,15 +153,15 @@ struct MenuBarContentView: View {
 
     private var blockRow: some View {
         HStack(spacing: 12) {
-            MenuBarGaugeIcon(fraction: fraction, size: 44)
+            MenuBarGaugeIcon(newShare: newShare, size: 44)
             VStack(alignment: .leading, spacing: 1) {
-                Text("This block")
+                Text("This session")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
-                Text(Format.tokens(blockTokens))
+                Text(Format.tokens(blockNewTokens))
                     .font(Theme.numberFont(18))
                     .foregroundStyle(Theme.textPrimary)
-                Text("of \(Int(blockBudgetMTok))M budget")
+                Text("\(Format.tokens(blockCacheReadTokens)) cache-read")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
             }
