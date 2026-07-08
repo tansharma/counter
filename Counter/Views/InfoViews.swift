@@ -117,11 +117,15 @@ struct FunFactsCard: View {
         Card(title: "Vitals") {
             HStack(spacing: 0) {
                 fact(
-                    icon: "bolt.horizontal.circle.fill",
-                    value: String(format: "%.0f%%", store.cacheEfficiency * 100),
-                    label: "cache hit rate",
+                    icon: "arrow.triangle.2.circlepath",
+                    value: Format.tokens(store.totals.cacheReadTokens),
+                    label: "cache reads (reused)",
                     color: Theme.positive
                 )
+                .help("""
+                    Context re-sent from cache on every turn, not new tokens — excluded from \
+                    the lifetime total above and billed at a fraction of input price.
+                    """)
                 divider
                 fact(
                     icon: "banknote.fill",
