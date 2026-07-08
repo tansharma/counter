@@ -53,7 +53,20 @@ final class AnalyticsTests: XCTestCase {
         XCTAssertEqual(totals.outputTokens, 75)
         XCTAssertEqual(totals.cacheCreationTokens, 10)
         XCTAssertEqual(totals.cacheReadTokens, 40)
-        XCTAssertEqual(totals.totalTokens, 425)
+        // totalTokens excludes cache reads (300 input + 75 output + 10 cache-creation);
+        // cache reads are still available raw via totals.cacheReadTokens above.
+        XCTAssertEqual(totals.totalTokens, 385)
+    }
+
+    /// Cache reads recur on every turn of a conversation and dominate raw totals over
+    /// a session, so headline stats (Totals) must exclude them while gauges that
+    /// proxy Anthropic's actual rate limit (Block) must keep them.
+    func testHeadlineTotalsExcludeCacheReadsButBlockGaugeIncludesThem() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", input: 100, output: 50, cacheCreate: 10, cacheRead: 1_000),
+        ]
+        XCTAssertEqual(UsageAnalytics.totals(events).totalTokens, 160)
+        XCTAssertEqual(UsageAnalytics.blocks(events, calendar: utcCalendar)[0].totalTokens, 1_160)
     }
 
     func testByModelSortsLargestFirst() {
