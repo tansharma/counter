@@ -55,9 +55,20 @@ public struct UsageEvent: Equatable, Sendable {
         self.agent = agent
     }
 
-    /// Every token the API processed for this turn.
+    /// Every token the API processed for this turn, cache reads included at full
+    /// weight. This is what Anthropic's rate limits track (cache reads still cost
+    /// compute, just discounted) — use it for the 5-hour block / weekly gauges,
+    /// never for a "tokens used" headline.
     public var totalTokens: Int {
         inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens
+    }
+
+    /// Tokens actually new this turn: everything except cache reads. A long
+    /// conversation re-reads its whole history from cache on every turn, so
+    /// `totalTokens` inflates by 10-100x over a session — `newTokens` is what
+    /// "tokens used" means to a human, and what most external usage trackers report.
+    public var newTokens: Int {
+        inputTokens + outputTokens + cacheCreationTokens
     }
 
     /// Last path component of the project directory, for display.
