@@ -1,15 +1,13 @@
 import SwiftUI
 import CounterCore
 
-/// User-tunable sources, budgets, and appearance. Limits are budgets the user sets,
-/// not values fetched from Anthropic — plan limits aren't exposed locally (see
-/// CLAUDE.md).
+/// User-tunable sources and appearance. Anthropic doesn't expose plan limits locally
+/// (see CLAUDE.md), so the dashboard's gauges no longer compare against a user-set
+/// budget either — there's nothing to configure here for them anymore.
 struct SettingsView: View {
     let store: DataStore
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .auto
     @AppStorage("displayNameOverride") private var displayNameOverride = ""
-    @AppStorage("blockBudgetMTok") private var blockBudgetMTok = 25.0
-    @AppStorage("weeklyBudgetMTok") private var weeklyBudgetMTok = 300.0
     // One toggle per agent source; keys come from DataStore.settingsKey(for:).
     @AppStorage("source_claude_enabled") private var claudeEnabled = true
     @AppStorage("source_codex_enabled") private var codexEnabled = true
@@ -36,29 +34,7 @@ struct SettingsView: View {
                         }
                     }
                 }
-                Text("Counter reads each tool's local session logs and folds them into every chart, gauge, and total. Sources marked 'not detected' have no session directory on this Mac (OpenCode's newer database-only format isn't read yet).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Budgets") {
-                LabeledContent("5-hour block budget") {
-                    HStack {
-                        Slider(value: $blockBudgetMTok, in: 1...200, step: 1)
-                        Text("\(Int(blockBudgetMTok))M tokens")
-                            .monospacedDigit()
-                            .frame(width: 100, alignment: .trailing)
-                    }
-                }
-                LabeledContent("Weekly budget") {
-                    HStack {
-                        Slider(value: $weeklyBudgetMTok, in: 10...2000, step: 10)
-                        Text("\(Int(weeklyBudgetMTok))M tokens")
-                            .monospacedDigit()
-                            .frame(width: 100, alignment: .trailing)
-                    }
-                }
-                Text("Anthropic doesn't publish per-plan token limits locally, so gauges compare against these budgets. With multiple sources enabled the gauges aggregate all of them — tune budgets accordingly.")
+                Text("Counter reads each tool's local session logs and folds them into every chart and total, including Session Usage and This Week — except the Claude Block Reset countdown, which is Claude Code only since it's the one gauge tied to Anthropic's own rate-limit window. Sources marked 'not detected' have no session directory on this Mac (OpenCode's newer database-only format isn't read yet).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
