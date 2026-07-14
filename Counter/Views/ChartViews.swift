@@ -163,10 +163,11 @@ struct AgentBreakdownCard: View {
     }
 }
 
-/// Stable per-agent tint used by the breakdown card and session-history badges.
+/// Stable per-agent tint used by the breakdown card and session-history badges —
+/// keyed off `AgentSource.chartColorIndex` (CounterCore) so it stays stable even if
+/// a new agent is inserted before existing ones in `allCases`.
 func agentColor(_ agent: AgentSource) -> Color {
-    let index = AgentSource.allCases.firstIndex(of: agent) ?? 0
-    return Theme.series[index % Theme.series.count]
+    Theme.series[agent.chartColorIndex % Theme.series.count]
 }
 
 // MARK: - Shared card chrome
