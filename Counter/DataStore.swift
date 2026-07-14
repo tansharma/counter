@@ -113,15 +113,9 @@ final class DataStore {
 
     /// Every enabled source's events from the current week (Monday start) — feeds This
     /// Week's composition, same reasoning as `currentBlockAllAgents` above.
-    private var weeklyTokens: UsageAnalytics.WeeklyTokens {
+    var weeklyTokens: UsageAnalytics.WeeklyTokens {
         UsageAnalytics.weeklyTokens(events, scope: .allEnabled, now: .now)
     }
-
-    /// Tokens used this week, raw (cache-read included), across all enabled sources.
-    var tokensThisWeek: Int { weeklyTokens.totalTokens }
-
-    /// Same window, excluding cache-read — see `UsageEvent.newTokens`.
-    var tokensThisWeekNew: Int { weeklyTokens.newTokens }
 }
 
 // MARK: - Formatting helpers shared by the views
