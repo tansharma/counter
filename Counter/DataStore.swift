@@ -75,13 +75,16 @@ final class DataStore {
     /// Only Claude Code has a 5-hour block / weekly rate limit, so the reset countdown
     /// ("Claude Block Reset") must ignore Codex/Gemini/OpenCode usage even though every
     /// other stat in the app — including Session Usage / This Week's token counts —
-    /// aggregates all enabled sources.
-    private var claudeEvents: [UsageEvent] { events.filter { $0.agent == .claude } }
-    var currentBlock: UsageAnalytics.Block? { UsageAnalytics.currentBlock(claudeEvents, now: .now) }
+    /// aggregates all enabled sources. Scoping lives in `UsageAnalytics.AgentScope`.
+    var currentBlock: UsageAnalytics.Block? {
+        UsageAnalytics.currentBlock(events, scope: .claudeOnly, now: .now)
+    }
     /// Same 5-hour-block reconstruction, but over every enabled source — feeds Session
     /// Usage's new/cache-read composition, which isn't a rate-limit proxy anymore and has
     /// no reason to exclude Codex/Gemini/OpenCode.
-    var currentBlockAllAgents: UsageAnalytics.Block? { UsageAnalytics.currentBlock(events, now: .now) }
+    var currentBlockAllAgents: UsageAnalytics.Block? {
+        UsageAnalytics.currentBlock(events, scope: .allEnabled, now: .now)
+    }
     var streakDays: Int { UsageAnalytics.currentStreakDays(events) }
     var cacheSavingsUSD: Double { UsageAnalytics.totalCacheSavingsUSD(events) }
     var busiestDay: UsageAnalytics.DayBucket? { UsageAnalytics.busiestDay(events) }
@@ -108,24 +111,17 @@ final class DataStore {
         return UsageAnalytics.dailySeries(events).filter { $0.day >= cutoff }
     }
 
-    /// Every enabled source's events from the current UK week (Monday start) — feeds
-    /// This Week's composition, same reasoning as `currentBlockAllAgents` above.
-    private var eventsThisWeek: [UsageEvent] {
-        var calendar = Calendar.current
-        calendar.firstWeekday = 2
-        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: .now)?.start else { return [] }
-        return events.filter { $0.timestamp >= weekStart }
+    /// Every enabled source's events from the current week (Monday start) — feeds This
+    /// Week's composition, same reasoning as `currentBlockAllAgents` above.
+    private var weeklyTokens: UsageAnalytics.WeeklyTokens {
+        UsageAnalytics.weeklyTokens(events, scope: .allEnabled, now: .now)
     }
 
     /// Tokens used this week, raw (cache-read included), across all enabled sources.
-    var tokensThisWeek: Int {
-        eventsThisWeek.reduce(0) { $0 + $1.totalTokens }
-    }
+    var tokensThisWeek: Int { weeklyTokens.totalTokens }
 
     /// Same window, excluding cache-read — see `UsageEvent.newTokens`.
-    var tokensThisWeekNew: Int {
-        eventsThisWeek.reduce(0) { $0 + $1.newTokens }
-    }
+    var tokensThisWeekNew: Int { weeklyTokens.newTokens }
 }
 
 // MARK: - Formatting helpers shared by the views
