@@ -162,6 +162,12 @@ public enum UsageAnalytics {
         public let totalTokens: Int
         public let activeSeconds: TimeInterval
         public let sessions: Int
+
+        /// True when `path` is a Gemini unresolved-hash placeholder rather than a
+        /// real project directory — see `GeminiSessionParser.unresolvedHash(from:)`.
+        public var isUnresolvedGeminiProject: Bool {
+            GeminiSessionParser.unresolvedHash(from: path) != nil
+        }
     }
 
     /// Per-project totals plus "active time": the sum of gaps between consecutive
