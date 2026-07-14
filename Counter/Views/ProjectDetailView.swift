@@ -37,11 +37,15 @@ struct ProjectDetailView: View {
                 Text(project.name)
                     .font(Theme.displayFont(26))
                     .foregroundStyle(Theme.textPrimary)
-                Text(project.path)
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
+                Text(
+                    project.isUnresolvedGeminiProject
+                        ? "Gemini didn't record a project folder for this session — usage is grouped by hash until it does."
+                        : project.path
+                )
+                .font(.system(size: 12, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.head)
             }
             HStack(spacing: 0) {
                 stat(value: Format.tokens(totals.totalTokens), label: "total tokens")
