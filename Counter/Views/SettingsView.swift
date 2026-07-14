@@ -8,11 +8,6 @@ struct SettingsView: View {
     let store: DataStore
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .auto
     @AppStorage("displayNameOverride") private var displayNameOverride = ""
-    // One toggle per agent source; keys come from DataStore.settingsKey(for:).
-    @AppStorage("source_claude_enabled") private var claudeEnabled = true
-    @AppStorage("source_codex_enabled") private var codexEnabled = true
-    @AppStorage("source_gemini_enabled") private var geminiEnabled = true
-    @AppStorage("source_opencode_enabled") private var opencodeEnabled = true
 
     var body: some View {
         Form {
@@ -23,16 +18,11 @@ struct SettingsView: View {
 
             Section("Sources") {
                 ForEach(AgentSource.allCases) { agent in
-                    Toggle(isOn: binding(for: agent)) {
-                        HStack(spacing: 8) {
-                            Text(agent.displayName)
-                            if !store.detectedAgents.contains(agent) {
-                                Text("not detected")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+                    AgentToggleRow(
+                        agent: agent,
+                        isDetected: store.detectedAgents.contains(agent),
+                        store: store
+                    )
                 }
                 Text("Counter reads each tool's local session logs and folds them into every chart and total, including Session Usage and This Week — except the Claude Block Reset countdown, which is Claude Code only since it's the one gauge tied to Anthropic's own rate-limit window. Sources marked 'not detected' have no session directory on this Mac (OpenCode's newer database-only format isn't read yet).")
                     .font(.caption)
@@ -51,17 +41,39 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .navigationTitle("Counter Settings")
-        .onChange(of: [claudeEnabled, codexEnabled, geminiEnabled, opencodeEnabled]) {
-            Task { await store.refresh() }
-        }
+    }
+}
+
+/// One source's enable toggle, backed directly by its own `@AppStorage` key (rather
+/// than a hand-declared var per agent in `SettingsView`) so a new `AgentSource` case
+/// gets a working toggle — persisted, labeled, refresh-triggering — the moment it's
+/// added to `allCases`, with no edit here.
+private struct AgentToggleRow: View {
+    let agent: AgentSource
+    let isDetected: Bool
+    let store: DataStore
+    @AppStorage private var enabled: Bool
+
+    init(agent: AgentSource, isDetected: Bool, store: DataStore) {
+        self.agent = agent
+        self.isDetected = isDetected
+        self.store = store
+        _enabled = AppStorage(wrappedValue: true, DataStore.settingsKey(for: agent))
     }
 
-    private func binding(for agent: AgentSource) -> Binding<Bool> {
-        switch agent {
-        case .claude: $claudeEnabled
-        case .codex: $codexEnabled
-        case .gemini: $geminiEnabled
-        case .opencode: $opencodeEnabled
+    var body: some View {
+        Toggle(isOn: $enabled) {
+            HStack(spacing: 8) {
+                Text(agent.displayName)
+                if !isDetected {
+                    Text("not detected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .onChange(of: enabled) {
+            Task { await store.refresh() }
         }
     }
 }
