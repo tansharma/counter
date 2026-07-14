@@ -71,8 +71,14 @@ public struct UsageEvent: Equatable, Sendable {
         inputTokens + outputTokens + cacheCreationTokens
     }
 
-    /// Last path component of the project directory, for display.
+    /// Last path component of the project directory, for display. Surfaces
+    /// Gemini's unresolved-hash fallback (see `GeminiSessionParser`) as an
+    /// explicit placeholder rather than a bare hash that reads like a real
+    /// folder name.
     public var projectName: String {
+        if let hash = GeminiSessionParser.unresolvedHash(from: projectPath) {
+            return "Unresolved Gemini project (\(hash))"
+        }
         let name = (projectPath as NSString).lastPathComponent
         return name.isEmpty ? "unknown" : name
     }
