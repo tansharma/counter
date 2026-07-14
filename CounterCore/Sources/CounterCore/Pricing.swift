@@ -74,12 +74,33 @@ public enum Pricing {
         "ollama/", "lmstudio/", "local/",
     ]
 
+    /// Matches an Ollama-style tag suffix: short, at least one letter (excludes
+    /// purely numeric cloud version suffixes like ":0" or ":2026-01-15"), and built
+    /// only from alphanumerics with "_"/"." separators (e.g. "7b", "70b", "latest",
+    /// "q4_0", "v1.5") — never "-" or "/", which cloud/provider-routed ids do use.
+    private static let ollamaTagPattern = try! NSRegularExpression(
+        pattern: "^[a-z0-9]+(?:[._][a-z0-9]+)*$"
+    )
+
+    /// True when `id` (already lowercased) ends in a colon followed by something
+    /// that looks like an Ollama size/variant tag, as opposed to any arbitrary
+    /// colon-bearing cloud model id.
+    private static func hasOllamaStyleTag(_ id: String) -> Bool {
+        guard let colon = id.lastIndex(of: ":") else { return false }
+        let tag = String(id[id.index(after: colon)...])
+        guard (1...12).contains(tag.count), tag.contains(where: \.isLetter) else { return false }
+        let range = NSRange(tag.startIndex..., in: tag)
+        return ollamaTagPattern.firstMatch(in: tag, range: range) != nil
+    }
+
     /// True when the model id looks like a locally served model. Ollama tags
-    /// (`name:size`) are also treated as local — cloud model ids don't use ":".
+    /// (`name:size`) are also treated as local, but only when the tag actually
+    /// looks like one — an unrecognized cloud id that happens to contain ":"
+    /// falls through to "unknown model" instead of being misclassified as local.
     public static func isLocalModel(_ model: String) -> Bool {
         let id = model.lowercased()
         if localModelPrefixes.contains(where: { id.hasPrefix($0) }) { return true }
-        return id.contains(":") && rate(forModel: model) == nil
+        return hasOllamaStyleTag(id) && rate(forModel: model) == nil
     }
 
     /// Reference rate used to value local-model tokens: what the same tokens would
