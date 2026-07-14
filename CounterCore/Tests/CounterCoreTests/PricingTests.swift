@@ -74,6 +74,12 @@ final class PricingTests: XCTestCase {
         XCTAssertFalse(Pricing.isLocalModel("claude-sonnet-5"))
         XCTAssertFalse(Pricing.isLocalModel("gpt-5-codex"))
         XCTAssertFalse(Pricing.isLocalModel("gemini-2.5-pro"))
+        // A hypothetical unrecognized cloud/provider-routed id that happens to
+        // contain ":" shouldn't be misclassified as local — its suffix doesn't
+        // look like an Ollama size/variant tag (too long, hyphenated, no letters
+        // once you isolate a plausible tag boundary).
+        XCTAssertFalse(Pricing.isLocalModel("acme-frontier-cloud:enterprise-2026-01"))
+        XCTAssertFalse(Pricing.isLocalModel("acme-frontier-cloud:2026")) // numeric-only version suffix
     }
 
     func testLocalModelCostsZeroButHasCloudEquivalent() {
