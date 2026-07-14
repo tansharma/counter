@@ -1,5 +1,25 @@
 import Foundation
 
+/// Which agents' events an aggregate should include. Independent of, and never to be
+/// conflated with, `UsageEvent.totalTokens` vs `.newTokens` (whether cache-read tokens
+/// count) — those two axes combine freely, and which gauge uses which combination is a
+/// deliberate product decision (see call sites of `currentBlock`/`weeklyTokens`).
+public enum AgentScope: Sendable {
+    /// Only Claude Code events. Anthropic's 5-hour rate-limit window is a Claude-only
+    /// concept, so only a gauge proxying that real limit should use this.
+    case claudeOnly
+    /// Every event regardless of agent — the default for aggregates not tied to a
+    /// specific agent's rate limit.
+    case allEnabled
+
+    fileprivate func apply(_ events: [UsageEvent]) -> [UsageEvent] {
+        switch self {
+        case .claudeOnly: events.filter { $0.agent == .claude }
+        case .allEnabled: events
+        }
+    }
+}
+
 /// Pure aggregation over parsed usage events. Everything here is deterministic and
 /// takes `now`/`calendar` as parameters so tests can pin them.
 public enum UsageAnalytics {
@@ -254,17 +274,47 @@ public enum UsageAnalytics {
         return result
     }
 
-    /// The block containing `now`, if the latest block is still open.
+    /// The block containing `now`, if the latest block is still open, computed over the
+    /// given `scope` of agents.
     public static func currentBlock(
         _ events: [UsageEvent],
+        scope: AgentScope,
         now: Date,
         blockLength: TimeInterval = 5 * 3600,
         calendar: Calendar = .current
     ) -> Block? {
-        guard let last = blocks(events, blockLength: blockLength, calendar: calendar).last,
+        let scoped = scope.apply(events)
+        guard let last = blocks(scoped, blockLength: blockLength, calendar: calendar).last,
               last.start <= now, now < last.end
         else { return nil }
         return last
+    }
+
+    public struct WeeklyTokens: Equatable, Sendable {
+        /// Raw sum including cache-read — see `UsageEvent.totalTokens`.
+        public let totalTokens: Int
+        /// Same window, excluding cache-read — see `UsageEvent.newTokens`.
+        public let newTokens: Int
+    }
+
+    /// Tokens from the current week (Monday start) in the given `scope`, both raw and
+    /// cache-excluded — feeds This Week's composition gauge.
+    public static func weeklyTokens(
+        _ events: [UsageEvent],
+        scope: AgentScope,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> WeeklyTokens {
+        var weekCalendar = calendar
+        weekCalendar.firstWeekday = 2
+        guard let weekStart = weekCalendar.dateInterval(of: .weekOfYear, for: now)?.start else {
+            return WeeklyTokens(totalTokens: 0, newTokens: 0)
+        }
+        let scoped = scope.apply(events).filter { $0.timestamp >= weekStart }
+        return WeeklyTokens(
+            totalTokens: scoped.reduce(0) { $0 + $1.totalTokens },
+            newTokens: scoped.reduce(0) { $0 + $1.newTokens }
+        )
     }
 
     private static func finish(
