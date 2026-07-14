@@ -88,6 +88,8 @@ CounterCore/                 ← pure Swift package (macOS 14 / iOS 17, no UI im
   CodexSessionParser.swift   ← Codex rollouts (cache normalisation, fork gate)
   GeminiSessionParser.swift  ← Gemini chats (cumulative-counter deltas, dir resolution)
   OpenCodeParser.swift       ← OpenCode session/message join
+  AgentConfig.swift          ← per-agent root paths, detection, chart color, and parse
+                               dispatch registry — adding a source is one entry here
   UsageCollector.swift       ← source roots, detection, merged parseAll
   UsageAnalytics.swift       ← totals, by-model/project/agent, daily series, 5h blocks,
                                active time, streaks, cache efficiency, session summaries
@@ -160,7 +162,7 @@ There are a number of caveats and assumptions you should bear in mind. Read thes
   - Gemini's token fields are cumulative per session, so I turn them into deltas. 
   - Finally, OpenCode’s SQLite backend isn't parsed yet, so DB-only installs will just show up as "not detected."
 
-- Multiple enabled sources pool together — except Claude Block Reset. Every chart, total, and breakdown sums across every source you toggle on (a combined workspace view, not a per-agent breakdown), including Session Usage and This Week — except the Claude Block Reset countdown, which only ever counts Claude Code, since it's tracking Anthropic's own rate-limit window regardless of what else is enabled.
+- Multiple enabled sources pool together — except Claude Block Reset. Every chart, total, and breakdown sums across every source you toggle on (a combined workspace view, not a per-agent breakdown), including Session Usage and This Week — except the Claude Block Reset countdown, which only ever counts Claude Code, since it's tracking Anthropic's own rate-limit window regardless of what else is enabled. Under the hood this is one `AgentScope` switch (`.allEnabled` vs. `.claudeOnly`) that every aggregate in `UsageAnalytics` takes as a parameter, so which gauges pool and which stay Claude-only is a one-line, explicit choice rather than something you have to infer from the code around each call site.
 
 - Session cwd can drift. If you do a mid-run cd or rename a project folder, things can get messy. The app handles this by pinning each session to its dominant root, but it's a heuristic, not a guarantee.
 
