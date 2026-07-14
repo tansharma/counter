@@ -62,9 +62,7 @@ struct MenuBarLabel: View {
     @Environment(\.displayScale) private var displayScale
 
     private var newShare: Double {
-        let total = store.currentBlockAllAgents?.totalTokens ?? 0
-        guard total > 0 else { return 0 }
-        return Double(store.currentBlockAllAgents?.newTokens ?? 0) / Double(total)
+        store.currentBlockAllAgents?.newShare ?? 0
     }
 
     var body: some View {
@@ -117,10 +115,7 @@ struct MenuBarContentView: View {
 
     private var blockNewTokens: Int { store.currentBlockAllAgents?.newTokens ?? 0 }
     private var blockCacheReadTokens: Int { (store.currentBlockAllAgents?.totalTokens ?? 0) - blockNewTokens }
-    private var newShare: Double {
-        let total = blockNewTokens + blockCacheReadTokens
-        return total > 0 ? Double(blockNewTokens) / Double(total) : 0
-    }
+    private var newShare: Double { store.currentBlockAllAgents?.newShare ?? 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
