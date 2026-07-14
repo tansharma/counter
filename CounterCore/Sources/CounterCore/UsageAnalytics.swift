@@ -247,6 +247,12 @@ public enum UsageAnalytics {
         /// look enormous next to this; both are correct, just different questions.
         public let newTokens: Int
         public let outputTokens: Int
+
+        /// New tokens as a share of all tokens in this block (0...1). 0 when
+        /// `totalTokens` is 0.
+        public var newShare: Double {
+            totalTokens > 0 ? Double(newTokens) / Double(totalTokens) : 0
+        }
     }
 
     /// Reconstructs 5-hour usage blocks the way the community tools do: a block opens at
@@ -295,6 +301,12 @@ public enum UsageAnalytics {
         public let totalTokens: Int
         /// Same window, excluding cache-read — see `UsageEvent.newTokens`.
         public let newTokens: Int
+
+        /// New tokens as a share of all tokens this week (0...1). 0 when
+        /// `totalTokens` is 0.
+        public var newShare: Double {
+            totalTokens > 0 ? Double(newTokens) / Double(totalTokens) : 0
+        }
     }
 
     /// Tokens from the current week (Monday start) in the given `scope`, both raw and
