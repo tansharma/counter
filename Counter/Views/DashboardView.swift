@@ -135,28 +135,21 @@ struct DashboardView: View {
         }
     }
 
-    /// Composition of a set of token counts into a new/cache-read share pair — feeds the
-    /// two gauges below now that there's no budget to compare against, just "how much of
-    /// this was genuinely new work vs. reused context."
-    private func newShare(new: Int, total: Int) -> Double {
-        total > 0 ? Double(new) / Double(total) : 0
-    }
-
-    private var blockNewTokens: Int { store.currentBlockAllAgents?.newTokens ?? 0 }
-    private var blockCacheReadTokens: Int { (store.currentBlockAllAgents?.totalTokens ?? 0) - blockNewTokens }
-
     private var blockUsageGauge: some View {
-        SpeedometerView(
+        let block = store.currentBlockAllAgents
+        let newTokens = block?.newTokens ?? 0
+        let cacheReadTokens = (block?.totalTokens ?? 0) - newTokens
+        return SpeedometerView(
             title: "Session Usage",
             value: 1,
-            centerLabel: Format.tokens(blockNewTokens),
+            centerLabel: Format.tokens(newTokens),
             subLabel: "",
             accent: Theme.positive,
-            innerValue: newShare(new: blockNewTokens, total: blockNewTokens + blockCacheReadTokens),
+            innerValue: block?.newShare ?? 0,
             innerAccent: Theme.accent,
             showsLegend: true,
-            innerLegendValue: Format.tokens(blockNewTokens),
-            outerLegendValue: Format.tokens(blockCacheReadTokens)
+            innerLegendValue: Format.tokens(newTokens),
+            outerLegendValue: Format.tokens(cacheReadTokens)
         )
     }
 
@@ -181,19 +174,19 @@ struct DashboardView: View {
     }
 
     private var weeklyGauge: some View {
-        let weeklyNew = store.tokensThisWeekNew
-        let weeklyCacheRead = store.tokensThisWeek - weeklyNew
+        let weekly = store.weeklyTokens
+        let cacheReadTokens = weekly.totalTokens - weekly.newTokens
         return SpeedometerView(
             title: "This week",
             value: 1,
-            centerLabel: Format.tokens(weeklyNew),
+            centerLabel: Format.tokens(weekly.newTokens),
             subLabel: "",
             accent: Theme.positive,
-            innerValue: newShare(new: weeklyNew, total: weeklyNew + weeklyCacheRead),
+            innerValue: weekly.newShare,
             innerAccent: Theme.accent,
             showsLegend: true,
-            innerLegendValue: Format.tokens(weeklyNew),
-            outerLegendValue: Format.tokens(weeklyCacheRead)
+            innerLegendValue: Format.tokens(weekly.newTokens),
+            outerLegendValue: Format.tokens(cacheReadTokens)
         )
     }
 
