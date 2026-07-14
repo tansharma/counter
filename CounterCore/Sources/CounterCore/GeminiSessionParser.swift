@@ -125,15 +125,32 @@ public enum GeminiSessionParser {
             .joined()
     }
 
+    /// Prefix marking a project path as an unresolved-hash fallback rather than a
+    /// real project directory — deliberately not path-shaped (no "/") so it can
+    /// never be confused with a real project, and so `UsageEvent.projectName` /
+    /// `ProjectSlice.isUnresolvedGeminiProject` can detect it later even after the
+    /// event has been carried far from this parser.
+    public static let unresolvedPathPrefix = "gemini-unresolved:"
+
     private static func resolveProjectPath(
         dirName: String, in projects: [String: String]
     ) -> String {
         if let path = projects[dirName] { return path }
         if isHexHash(dirName) {
-            // Unmapped hash dirs still deserve a stable bucket rather than being dropped.
-            return "gemini/" + dirName.prefix(8)
+            // Unmapped hash dirs still deserve a stable bucket rather than being
+            // dropped, but must stay visibly distinct from a real project path —
+            // if the mapping resolves later, at least the gap stays legible in
+            // the meantime instead of silently posing as a real project.
+            return unresolvedPathPrefix + dirName.prefix(8)
         }
         return dirName
+    }
+
+    /// The short hash tag from an unresolved-fallback path produced above, or nil
+    /// if `path` isn't one.
+    public static func unresolvedHash(from path: String) -> String? {
+        guard path.hasPrefix(unresolvedPathPrefix) else { return nil }
+        return String(path.dropFirst(unresolvedPathPrefix.count))
     }
 
     private static func isSessionFile(_ url: URL) -> Bool {
