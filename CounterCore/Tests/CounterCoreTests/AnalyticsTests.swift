@@ -164,10 +164,74 @@ final class AnalyticsTests: XCTestCase {
 
     func testCurrentBlockOnlyWhenNowInsideWindow() {
         let events = [event(at: "2026-07-01T10:20:00Z")]
-        let inside = UsageAnalytics.currentBlock(events, now: date("2026-07-01T12:00:00Z"), calendar: utcCalendar)
+        let inside = UsageAnalytics.currentBlock(events, scope: .allEnabled, now: date("2026-07-01T12:00:00Z"), calendar: utcCalendar)
         XCTAssertNotNil(inside)
-        let outside = UsageAnalytics.currentBlock(events, now: date("2026-07-01T20:00:00Z"), calendar: utcCalendar)
+        let outside = UsageAnalytics.currentBlock(events, scope: .allEnabled, now: date("2026-07-01T20:00:00Z"), calendar: utcCalendar)
         XCTAssertNil(outside)
+    }
+
+    // MARK: Agent scope — locks which gauge uses which scope/token-definition combo.
+    // Claude Block Reset must stay claude-only + raw; Session Usage/This Week must be
+    // all-agents (one raw, one new). See handover.md's "Two token totals AND two event
+    // scopes" gotcha before changing any of this.
+
+    func testCurrentBlockClaudeOnlyScopeExcludesOtherAgents() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", input: 100, output: 0, session: "s1", agent: .claude),
+            event(at: "2026-07-01T10:05:00Z", input: 1_000, output: 0, session: "codex:a", agent: .codex),
+        ]
+        let block = UsageAnalytics.currentBlock(
+            events, scope: .claudeOnly, now: date("2026-07-01T11:00:00Z"), calendar: utcCalendar
+        )
+        XCTAssertEqual(block?.totalTokens, 100)
+    }
+
+    func testCurrentBlockAllEnabledScopeIncludesEveryAgent() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", input: 100, output: 0, session: "s1", agent: .claude),
+            event(at: "2026-07-01T10:05:00Z", input: 1_000, output: 0, session: "codex:a", agent: .codex),
+        ]
+        let block = UsageAnalytics.currentBlock(
+            events, scope: .allEnabled, now: date("2026-07-01T11:00:00Z"), calendar: utcCalendar
+        )
+        XCTAssertEqual(block?.totalTokens, 1_100)
+    }
+
+    func testWeeklyTokensAllEnabledScopeSumsRawAndNewAcrossAgents() {
+        let events = [
+            // Wed: raw 1050 (100+50+900 cache-read), new 150.
+            event(at: "2026-07-01T10:00:00Z", input: 100, output: 50, cacheRead: 900, session: "s1", agent: .claude),
+            // Thu: raw and new both 200 (no cache-read).
+            event(at: "2026-07-02T10:00:00Z", input: 200, output: 0, session: "codex:a", agent: .codex),
+        ]
+        let weekly = UsageAnalytics.weeklyTokens(
+            events, scope: .allEnabled, now: date("2026-07-03T10:00:00Z"), calendar: utcCalendar
+        )
+        XCTAssertEqual(weekly.totalTokens, 1_250)
+        XCTAssertEqual(weekly.newTokens, 350)
+    }
+
+    func testWeeklyTokensClaudeOnlyScopeExcludesOtherAgents() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", input: 100, output: 50, session: "s1", agent: .claude),
+            event(at: "2026-07-01T10:05:00Z", input: 1_000, output: 0, session: "codex:a", agent: .codex),
+        ]
+        let weekly = UsageAnalytics.weeklyTokens(
+            events, scope: .claudeOnly, now: date("2026-07-01T11:00:00Z"), calendar: utcCalendar
+        )
+        XCTAssertEqual(weekly.totalTokens, 150)
+        XCTAssertEqual(weekly.newTokens, 150)
+    }
+
+    func testWeeklyTokensExcludesEventsBeforeMondayWeekStart() {
+        let events = [
+            event(at: "2026-06-28T10:00:00Z", input: 500, output: 0), // Sunday, prior week
+            event(at: "2026-06-29T10:00:00Z", input: 100, output: 0), // Monday, this week
+        ]
+        let weekly = UsageAnalytics.weeklyTokens(
+            events, scope: .allEnabled, now: date("2026-07-01T10:00:00Z"), calendar: utcCalendar
+        )
+        XCTAssertEqual(weekly.totalTokens, 100)
     }
 
     // MARK: Fun facts
