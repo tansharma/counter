@@ -114,6 +114,41 @@ final class GeminiParserTests: XCTestCase {
             map[GeminiSessionParser.pathHash("/Users/t/dev/other")], "/Users/t/dev/other")
     }
 
+    func testUnresolvedHashDirFallsBackToVisiblyDistinctPlaceholder() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gemini-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // A tmp/<hash> dir with no matching entry in projects.json or
+        // trustedFolders.json (neither file is even written here) — the hash
+        // stays unmapped, so resolveProjectPath must fall back.
+        let hash = GeminiSessionParser.pathHash("/some/path/nobody/mapped")
+        let chatsDir = root.appendingPathComponent("tmp/\(hash)/chats")
+        try FileManager.default.createDirectory(
+            at: chatsDir, withIntermediateDirectories: true)
+
+        let file = """
+        {"sessionId":"sess-unresolved","startTime":"2026-07-03T10:00:00.000Z","messages":[\
+        \(message(input: 10, output: 5))]}
+        """
+        try file.write(
+            to: chatsDir.appendingPathComponent("session-1.json"),
+            atomically: true, encoding: .utf8)
+
+        let events = GeminiSessionParser.parseAll(geminiRoot: root)
+        XCTAssertEqual(events.count, 1)
+        let path = try XCTUnwrap(events.first?.projectPath)
+
+        // Not path-shaped (no real project ever looks like this), and the short
+        // hash is recoverable via the public helper.
+        XCTAssertFalse(path.hasPrefix("/"))
+        XCTAssertEqual(GeminiSessionParser.unresolvedHash(from: path), String(hash.prefix(8)))
+
+        // The gap reads as a resolution gap, not a real project named "gemini".
+        XCTAssertEqual(
+            events.first?.projectName, "Unresolved Gemini project (\(hash.prefix(8)))")
+    }
+
     func testProjectMapAcceptsFlatTrustedFoldersShape() throws {
         // The shape Gemini CLI actually writes today: {absolutePath: "TRUST_FOLDER"}.
         let root = FileManager.default.temporaryDirectory
