@@ -234,6 +234,39 @@ final class AnalyticsTests: XCTestCase {
         XCTAssertEqual(weekly.totalTokens, 100)
     }
 
+    // MARK: newShare
+
+    func testBlockNewShareIsNewTokensOverTotal() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", input: 100, output: 50, cacheRead: 900),
+        ]
+        let block = UsageAnalytics.currentBlock(
+            events, scope: .allEnabled, now: date("2026-07-01T11:00:00Z"), calendar: utcCalendar
+        )
+        XCTAssertEqual(block?.newShare, 150.0 / 1_050.0)
+    }
+
+    func testBlockNewShareIsZeroWhenTotalIsZero() {
+        let block = UsageAnalytics.Block(start: date("2026-07-01T10:00:00Z"), end: date("2026-07-01T15:00:00Z"), totalTokens: 0, newTokens: 0, outputTokens: 0)
+        XCTAssertEqual(block.newShare, 0)
+    }
+
+    func testWeeklyTokensNewShareIsNewTokensOverTotal() {
+        let events = [
+            event(at: "2026-07-01T10:00:00Z", input: 100, output: 50, cacheRead: 900, session: "s1", agent: .claude),
+            event(at: "2026-07-02T10:00:00Z", input: 200, output: 0, session: "codex:a", agent: .codex),
+        ]
+        let weekly = UsageAnalytics.weeklyTokens(
+            events, scope: .allEnabled, now: date("2026-07-03T10:00:00Z"), calendar: utcCalendar
+        )
+        XCTAssertEqual(weekly.newShare, 350.0 / 1_250.0)
+    }
+
+    func testWeeklyTokensNewShareIsZeroWhenTotalIsZero() {
+        let weekly = UsageAnalytics.WeeklyTokens(totalTokens: 0, newTokens: 0)
+        XCTAssertEqual(weekly.newShare, 0)
+    }
+
     // MARK: Fun facts
 
     func testStreakBreaksOnGapDay() {
