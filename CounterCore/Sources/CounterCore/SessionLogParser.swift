@@ -93,22 +93,20 @@ public enum SessionLogParser {
         }
     }
 
-    /// Parses every `.jsonl` under `~/.claude/projects` (or an override root).
+    /// Parses every `.jsonl` under `~/.claude/projects` (or an override root),
+    /// recursing into each session's `<session-id>/subagents/` subdirectory too —
+    /// Task-tool subagent runs get their own nested transcript there, sharing the
+    /// parent session's `sessionId`/`cwd` but never sitting at the project dir's
+    /// top level, so a shallow listing silently drops all subagent token usage.
     public static func parseAll(projectsRoot: URL) -> [UsageEvent] {
         let fileManager = FileManager.default
-        guard let projectDirs = try? fileManager.contentsOfDirectory(
+        var events: [UsageEvent] = []
+        guard let enumerator = fileManager.enumerator(
             at: projectsRoot, includingPropertiesForKeys: nil
         ) else { return [] }
-
-        var events: [UsageEvent] = []
-        for dir in projectDirs {
-            guard let files = try? fileManager.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: nil
-            ) else { continue }
-            for file in files where file.pathExtension == "jsonl" {
-                guard let content = try? String(contentsOf: file, encoding: .utf8) else { continue }
-                events.append(contentsOf: parse(jsonl: content))
-            }
+        for case let file as URL in enumerator where file.pathExtension == "jsonl" {
+            guard let content = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            events.append(contentsOf: parse(jsonl: content))
         }
         return events.sorted { $0.timestamp < $1.timestamp }
     }

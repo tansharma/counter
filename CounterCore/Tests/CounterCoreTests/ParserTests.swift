@@ -107,4 +107,34 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(events.map(\.sessionId).count, 2)
         XCTAssertLessThan(events[0].timestamp, events[1].timestamp)
     }
+
+    // MARK: parseAll — nested subagent transcripts
+
+    func testParseAllIncludesNestedSubagentTranscripts() throws {
+        // Real Claude Code layout: a session's Task-tool subagent runs land in
+        // <project>/<session-id>/subagents/agent-*.jsonl, sharing the parent
+        // session's sessionId/cwd — not at the project dir's top level.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("parseall-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let projectDir = root.appendingPathComponent("proj")
+        let subagentsDir = projectDir
+            .appendingPathComponent("sess-1")
+            .appendingPathComponent("subagents")
+        try FileManager.default.createDirectory(at: subagentsDir, withIntermediateDirectories: true)
+
+        try assistantLine(id: "msg_main", session: "sess-1").write(
+            to: projectDir.appendingPathComponent("sess-1.jsonl"),
+            atomically: true, encoding: .utf8
+        )
+        try assistantLine(id: "msg_sub", output: 30, session: "sess-1").write(
+            to: subagentsDir.appendingPathComponent("agent-1.jsonl"),
+            atomically: true, encoding: .utf8
+        )
+
+        let events = SessionLogParser.parseAll(projectsRoot: root)
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(Set(events.map(\.outputTokens)), [50, 30])
+    }
 }
