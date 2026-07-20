@@ -135,13 +135,6 @@ struct FunFactsCard: View {
                 )
                 divider
                 fact(
-                    icon: "flame.fill",
-                    value: "\(store.streakDays)d",
-                    label: "current streak",
-                    color: Theme.accent
-                )
-                divider
-                fact(
                     icon: "square.stack.3d.up.fill",
                     value: "\(store.totals.sessions)",
                     label: "total sessions",
