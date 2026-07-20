@@ -85,7 +85,6 @@ final class DataStore {
     var currentBlockAllAgents: UsageAnalytics.Block? {
         UsageAnalytics.currentBlock(events, scope: .allEnabled, now: .now)
     }
-    var streakDays: Int { UsageAnalytics.currentStreakDays(events) }
     var cacheSavingsUSD: Double { UsageAnalytics.totalCacheSavingsUSD(events) }
     var busiestDay: UsageAnalytics.DayBucket? { UsageAnalytics.busiestDay(events) }
 
