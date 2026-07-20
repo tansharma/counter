@@ -15,7 +15,7 @@ struct DashboardView: View {
                     VStack(spacing: 16) {
                         header
                         gaugeRow
-                        UsageOverTimeCard(store: store)
+                        ActivityCard(store: store)
                         HStack(alignment: .top, spacing: 16) {
                             ModelBreakdownCard(slices: store.modelSlices)
                             ProjectTimeCard(slices: store.projectSlices)
