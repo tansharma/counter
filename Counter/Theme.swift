@@ -1,4 +1,5 @@
 import SwiftUI
+import Spool
 
 /// The "Tachometer" palette — single source of truth for every colour in the app.
 /// Each token carries a light and a dark variant; views never hard-code colors.
@@ -25,6 +26,22 @@ enum Theme {
         adaptive(light: 0x5B6ABF, dark: 0x8B9AE8),
         adaptive(light: 0xB05BA6, dark: 0xD98BD0),
     ]
+
+    // Spool (activity heatmap/streak/sparkline) theme, built entirely from the tokens
+    // above. `accent` etc. are already appearance-adaptive `Color`s, so one instance
+    // covers both light and dark — no separate presets needed. Ramp starts at 0.35, not
+    // 0.25: a paler orange risks the lowest active level blending into `surfaceRaised`
+    // on the dark ink background.
+    static let spoolTheme = SpoolTheme(
+        background: surface,
+        emptyCell: surfaceRaised,
+        heatRamp: [0.35, 0.55, 0.75, 1.0].map { accent.opacity($0) },
+        label: textPrimary,
+        secondaryLabel: textSecondary,
+        accent: accent,
+        selectionRing: textPrimary,
+        calloutBackground: surface
+    )
 
     // Type scale — a deliberate display face for the big numbers.
     static func displayFont(_ size: CGFloat) -> Font {
