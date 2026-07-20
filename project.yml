@@ -6,6 +6,8 @@ options:
 packages:
   CounterCore:
     path: CounterCore
+  Spool:
+    path: ../Spool
 targets:
   Counter:
     type: application
@@ -13,6 +15,7 @@ targets:
     sources: [Counter]
     dependencies:
       - package: CounterCore
+      - package: Spool
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tansharma.Counter
