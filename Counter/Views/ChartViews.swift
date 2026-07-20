@@ -40,26 +40,6 @@ struct TokensBarChart: View {
     }
 }
 
-struct UsageOverTimeCard: View {
-    let store: DataStore
-    @State private var rangeDays = 30
-
-    var body: some View {
-        Card(title: "Usage over time") {
-            Picker("Range", selection: $rangeDays) {
-                Text("7d").tag(7)
-                Text("30d").tag(30)
-                Text("90d").tag(90)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 180)
-
-            TokensBarChart(series: store.dailySeries(days: rangeDays))
-        }
-    }
-}
-
 // MARK: - Breakdown rows shared by the model and agent cards
 
 /// One labelled share bar: dot, name, tokens, cost, and a capsule proportional
